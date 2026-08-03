@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Casewright App</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --ink:#0B1220;--ink2:#1A2434;--paper:#F4F6F4;--panel:#fff;--line:#DDE2DC;--line2:#C4CCC0;
+    --amber:#E8A013;--amber-d:#B87B00;--amber-l:#FBF0D5;--green:#2E7D4F;--green-l:#E4F2E9;
+    --red:#C0392B;--red-l:#F7E2DF;--blue:#2B5C8A;--blue-l:#E3EDF5;--grey:#6B7280;--grey-l:#9AA2AD;
+    --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;--mono:'SFMono-Regular',Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .hidden{display:none!important}
+
+  /* ---- Auth ---- */
+  .authwrap{min-height:100vh;display:grid;place-items:center;padding:20px}
+  .authcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:34px;width:100%;max-width:400px;box-shadow:0 10px 40px rgba(11,18,32,.08)}
+  .authcard .brand{display:flex;align-items:center;gap:10px;margin-bottom:22px}
+  .authcard .logo{width:32px;height:32px;border:2px solid var(--amber);border-radius:7px;display:grid;place-items:center;font-weight:800;color:var(--amber)}
+  .authcard b{font-size:17px}.authcard b span{color:var(--amber-d)}
+  .authcard h2{font-size:20px;margin-bottom:4px}
+  .authcard .sub{color:var(--grey);font-size:13px;margin-bottom:20px}
+  label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--grey);margin-bottom:5px}
+  input{width:100%;padding:10px 12px;border:1px solid var(--line2);border-radius:7px;font-family:var(--sans);font-size:14px;margin-bottom:14px}
+  input:focus{outline:none;border-color:var(--amber);box-shadow:0 0 0 3px var(--amber-l)}
+  .btn{font-size:14px;font-weight:700;padding:11px 18px;border-radius:8px;border:1px solid var(--ink);background:var(--ink);color:#fff;cursor:pointer;font-family:var(--sans);width:100%}
+  .btn:hover{background:var(--amber-d);border-color:var(--amber-d)}
+  .btn.sec{background:var(--panel);color:var(--ink)}.btn.sec:hover{background:var(--paper);color:var(--ink)}
+  .btn.sm{width:auto;padding:8px 14px;font-size:13px}
+  .btn.tiny{width:auto;padding:6px 11px;font-size:12px;font-weight:600}
+  .authlink{text-align:center;font-size:13px;color:var(--grey);margin-top:14px}
+  .authlink a{color:var(--amber-d);font-weight:600;cursor:pointer}
+  .err{background:var(--red-l);color:var(--red);padding:10px 12px;border-radius:7px;font-size:13px;margin-bottom:14px}
+  .ok{background:var(--green-l);color:var(--green);padding:10px 12px;border-radius:7px;font-size:13px;margin-bottom:14px}
+  .cfgwarn{background:var(--amber-l);color:var(--amber-d);padding:12px;border-radius:8px;font-size:12.5px;margin-bottom:16px;line-height:1.5}
+
+  /* ---- App chrome ---- */
+  header{background:var(--ink);color:#fff;padding:0 22px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+  .brand{display:flex;align-items:center;gap:11px}
+  .logo{width:30px;height:30px;border:2px solid var(--amber);display:grid;place-items:center;font-weight:800;color:var(--amber);font-size:15px;border-radius:5px}
+  .brand h1{font-size:16px;font-weight:700}.brand h1 span{color:var(--amber)}
+  .brand .tag{font-family:var(--mono);font-size:10px;color:var(--grey-l);margin-top:1px}
+  .usermenu{display:flex;align-items:center;gap:14px;font-size:13px;color:#C8CFD8}
+  .usermenu a{color:var(--amber);cursor:pointer;font-weight:600}
+
+  /* ---- Case list ---- */
+  .listwrap{max-width:960px;margin:32px auto;padding:0 22px}
+  .listhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}
+  .listhead h2{font-size:23px;font-weight:800;letter-spacing:-.4px}
+  .caselist{display:grid;gap:12px}
+  .caserow{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:border-color .15s}
+  .caserow:hover{border-color:var(--amber)}
+  .caserow .ci h3{font-size:15px;font-weight:700}
+  .caserow .ci p{font-size:12.5px;color:var(--grey);margin-top:2px}
+  .caserow .cr{display:flex;align-items:center;gap:16px}
+  .ring-mini{position:relative;width:44px;height:44px}
+  .ring-mini svg{transform:rotate(-90deg)}
+  .ring-mini .t{position:absolute;inset:0;display:grid;place-items:center;font-size:12px;font-weight:800;font-family:var(--mono)}
+  .empty{text-align:center;padding:60px 20px;color:var(--grey)}
+  .empty h3{font-size:18px;color:var(--ink);margin-bottom:6px}
+
+  /* ---- Editor (reused from prototype) ---- */
+  .shell{display:grid;grid-template-columns:230px 1fr;min-height:calc(100vh - 56px)}
+  nav.side{background:var(--ink2);padding:16px 0}
+  nav.side .back{color:var(--grey-l);font-size:12px;padding:0 20px 12px;cursor:pointer;display:flex;align-items:center;gap:6px}
+  nav.side .back:hover{color:#fff}
+  nav.side .grp{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--grey-l);padding:12px 20px 6px}
+  nav.side button.nav{width:100%;text-align:left;background:none;border:none;color:#C8CFD8;padding:9px 20px;font-size:13.5px;cursor:pointer;display:flex;gap:10px;border-left:3px solid transparent}
+  nav.side button.nav:hover{background:rgba(255,255,255,.05);color:#fff}
+  nav.side button.nav.active{background:rgba(232,160,19,.12);color:var(--amber);border-left-color:var(--amber);font-weight:600}
+  nav.side button.nav .n{font-family:var(--mono);font-size:10px;opacity:.7}
+  main{padding:26px 32px;overflow-x:hidden}
+  .page{display:none}.page.active{display:block}
+  h2.pt{font-size:21px;font-weight:700;letter-spacing:-.3px;margin-bottom:3px}
+  .sub{color:var(--grey);font-size:13px;margin-bottom:22px;max-width:760px}
+  .card2{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:20px;margin-bottom:16px}
+  .card2 h3{font-size:14px;font-weight:700;margin-bottom:3px}.card2 .ch{color:var(--grey);font-size:12.5px;margin-bottom:14px}
+  select,textarea{width:100%;padding:9px 11px;border:1px solid var(--line2);border-radius:6px;background:#FCFDFC;font-family:var(--sans);font-size:13.5px;margin-bottom:14px;color:var(--ink)}
+  textarea{resize:vertical;min-height:60px}
+  .g2{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 14px}
+  @media(max-width:720px){.g2,.g3{grid-template-columns:1fr}}
+  .savebar{position:sticky;bottom:0;background:linear-gradient(transparent,var(--paper) 40%);padding:14px 0;display:flex;gap:10px;align-items:center}
+  .savestate{font-family:var(--mono);font-size:11px;color:var(--grey)}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+  @media(max-width:720px){.kpis{grid-template-columns:1fr 1fr}}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:16px}
+  .kpi .k{font-family:var(--mono);font-size:11px;color:var(--grey);text-transform:uppercase}.kpi .v{font-size:30px;font-weight:800;letter-spacing:-1px;margin-top:6px}.kpi .d{font-size:11.5px;color:var(--grey);margin-top:2px}
+  .kpi.amber .v{color:var(--amber-d)}.kpi.green .v{color:var(--green)}.kpi.red .v{color:var(--red)}.kpi.blue .v{color:var(--blue)}
+  .gauge-wrap{display:flex;align-items:center;gap:26px}.gauge{position:relative;width:150px;height:150px;flex-shrink:0}.gauge svg{transform:rotate(-90deg)}
+  .gauge .lbl{position:absolute;inset:0;display:grid;place-items:center;text-align:center}.gauge .lbl .num{font-size:34px;font-weight:800;letter-spacing:-1px}.gauge .lbl .u{font-size:12px;color:var(--grey);margin-top:-2px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{font-family:var(--mono);font-size:10px;text-transform:uppercase;text-align:left;padding:9px 10px;border-bottom:2px solid var(--ink);color:var(--grey)}
+  td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+  td select,td input{margin:0}
+  .chip{font-family:var(--mono);font-size:10px;font-weight:600;padding:3px 8px;border-radius:5px;display:inline-block}
+  .c-none{background:#EDEFED;color:var(--grey)}.c-plan{background:var(--blue-l);color:var(--blue)}.c-draft{background:var(--amber-l);color:var(--amber-d)}.c-rev{background:#E8EEF9;color:#3457A8}.c-assess{background:var(--green-l);color:var(--green)}
+  .status-pill{font-family:var(--mono);font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px}.s-in{background:var(--green-l);color:var(--green)}.s-limit{background:var(--amber-l);color:var(--amber-d)}.s-out{background:var(--red-l);color:var(--red)}
+  .gsn{margin-top:6px}.gnode{border:1.5px solid var(--ink);border-radius:8px;background:var(--panel);padding:13px 15px;position:relative;margin-bottom:14px}
+  .gnode .gt{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--amber-d)}.gnode .gc{font-size:13.5px;margin-top:4px}
+  .gsub{margin-left:26px;padding-left:20px;border-left:2px solid var(--line2);margin-top:14px}.gsub .gnode{border-width:1px;border-color:var(--line2)}
+  .gsub .gnode::before{content:"";position:absolute;left:-22px;top:22px;width:20px;height:2px;background:var(--line2)}
+  .ev{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}.evpill{font-family:var(--mono);font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:20px}
+  .evpill.ok{background:var(--green-l);color:var(--green)}.evpill.weak{background:var(--amber-l);color:var(--amber-d)}.evpill.miss{background:var(--red-l);color:var(--red)}
+  .claimscore{float:right;font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 8px;border-radius:5px}
+  .gap{display:flex;gap:11px;padding:12px 0;border-bottom:1px solid var(--line);align-items:flex-start}.gap:last-child{border-bottom:none}
+  .sev{font-family:var(--mono);font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;white-space:nowrap}
+  .sev.high{background:var(--red-l);color:var(--red)}.sev.med{background:var(--amber-l);color:var(--amber-d)}.sev.low{background:var(--blue-l);color:var(--blue)}
+  .gap .gx{font-size:13px}
+  .foot{font-family:var(--mono);font-size:10.5px;color:var(--grey-l);margin-top:26px;padding-top:14px;border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+
+<!-- ============ AUTH VIEW ============ -->
+<div class="authwrap" id="view-auth">
+  <div class="authcard">
+    <div class="brand"><div class="logo">C</div><b>CASE<span>WRIGHT</span></b></div>
+    <div id="cfgwarn" class="cfgwarn hidden">⚠ Supabase is not configured yet. Paste your project URL and anon key into <b>config.js</b> (see SETUP.md), then reload. Until then, sign-in won't work.</div>
+    <div id="auth-msg"></div>
+    <h2 id="auth-title">Log in</h2>
+    <div class="sub" id="auth-sub">Welcome back to Casewright.</div>
+    <label>Email</label>
+    <input type="email" id="auth-email" placeholder="you@company.com">
+    <label>Password</label>
+    <input type="password" id="auth-pass" placeholder="••••••••">
+    <button class="btn" id="auth-go">Log in</button>
+    <div class="authlink" id="auth-switch">New here? <a onclick="toSignup()">Create an account</a></div>
+  </div>
+</div>
+
+<!-- ============ APP VIEW ============ -->
+<div id="view-app" class="hidden">
+  <header>
+    <div class="brand"><div class="logo">C</div><div><h1>CASE<span>WRIGHT</span></h1><div class="tag">ISO/PAS 8800 ASSURANCE ARGUMENT BUILDER</div></div></div>
+    <div class="usermenu"><span id="who">—</span><a onclick="logout()">Log out</a></div>
+  </header>
+
+  <!-- Case list -->
+  <div class="listwrap" id="view-list">
+    <div class="listhead"><h2>Your assurance cases</h2><button class="btn sm" onclick="newCase()">+ New case</button></div>
+    <div id="caselist" class="caselist"></div>
+  </div>
+
+  <!-- Case editor -->
+  <div class="shell hidden" id="view-editor">
+    <nav class="side">
+      <div class="back" onclick="closeCase()">← All cases</div>
+      <div class="grp">Overview</div>
+      <button class="nav active" data-p="dash"><span class="n">01</span> Dashboard</button>
+      <div class="grp">Build the case</div>
+      <button class="nav" data-p="scope"><span class="n">02</span> AI Element &amp; Scope</button>
+      <button class="nav" data-p="odd"><span class="n">03</span> Input Space / ODD</button>
+      <button class="nav" data-p="evidence"><span class="n">04</span> Evidence Register</button>
+      <button class="nav" data-p="argument"><span class="n">05</span> Assurance Argument</button>
+      <div class="grp">Assess</div>
+      <button class="nav" data-p="sufficiency"><span class="n">06</span> Sufficiency &amp; Gaps</button>
+      <button class="nav" data-p="export"><span class="n">07</span> Export</button>
+    </nav>
+    <main>
+      <div class="page active" id="p-dash">
+        <h2 class="pt">Case Dashboard</h2>
+        <p class="sub">Casewright builds the ISO 8800 <b>assurance argument</b> and scores whether it is <b>sufficient</b> — flagging the gaps an assessor finds first. Additive to your requirements tool via ReqIF.</p>
+        <div class="kpis">
+          <div class="kpi blue"><div class="k">Readiness</div><div class="v" id="k-ready">0%</div><div class="d">weighted completeness</div></div>
+          <div class="kpi amber"><div class="k">Open Gaps</div><div class="v" id="k-gaps">0</div><div class="d">assessor-flagged</div></div>
+          <div class="kpi green"><div class="k">Evidence Mature</div><div class="v" id="k-ev">0/8</div><div class="d">reviewed or assessed</div></div>
+          <div class="kpi red"><div class="k">ODD Boundaries</div><div class="v" id="k-odd">0</div><div class="d">LIMIT / OUT</div></div>
+        </div>
+        <div class="card2"><div class="gauge-wrap">
+          <div class="gauge"><svg width="150" height="150" viewBox="0 0 150 150"><circle cx="75" cy="75" r="62" fill="none" stroke="#EDEFED" stroke-width="16"/><circle id="ring" cx="75" cy="75" r="62" fill="none" stroke="#E8A013" stroke-width="16" stroke-linecap="round" stroke-dasharray="389.6" stroke-dashoffset="389.6"/></svg><div class="lbl"><div><div class="num" id="ring-num">0</div><div class="u">% ready</div></div></div></div>
+          <div style="flex:1"><h3 id="verdict-t">—</h3><p class="ch" id="verdict-d" style="margin-bottom:12px"></p><button class="btn tiny" onclick="fillDemo()">Fill with worked example</button></div>
+        </div></div>
+      </div>
+
+      <div class="page" id="p-scope">
+        <h2 class="pt">AI Element &amp; Scope</h2><p class="sub">One case covers one AI element — the granularity ISO 8800 works at.</p>
+        <div class="card2">
+          <div class="g2"><div><label>Project</label><input type="text" id="f-proj" oninput="mark()"></div><div><label>AI element name</label><input type="text" id="f-name" oninput="mark()"></div></div>
+          <div class="g3">
+            <div><label>Function type</label><select id="f-func" onchange="mark()"><option value="">Select…</option><option>Perception — object detection</option><option>Perception — classification</option><option>Perception — sensor fusion</option><option>Prediction — trajectory / intent</option><option>Planning / decision</option><option>Monitoring / plausibility</option></select></div>
+            <div><label>ASIL of supported goal</label><select id="f-asil" onchange="mark()"><option value="">Select…</option><option>QM</option><option>ASIL A</option><option>ASIL B</option><option>ASIL C</option><option>ASIL D</option></select></div>
+            <div><label>Requirement type</label><select id="f-rtype" onchange="mark()"><option value="">Select…</option><option>Performance</option><option>Uncertainty handling</option><option>Robustness</option><option>Mixed</option></select></div>
+          </div>
+          <label>Role inside the ISO 26262 system (the interface — where the standards reconcile)</label>
+          <textarea id="f-role" oninput="mark()"></textarea>
+        </div>
+      </div>
+
+      <div class="page" id="p-odd">
+        <h2 class="pt">Input Space / ODD</h2><p class="sub">Each dimension, its quantified boundary, and whether the element operates inside it. Every LIMIT/OUT must reappear as evidence or a declared restriction.</p>
+        <div class="card2"><table><thead><tr><th style="width:22%">Dimension</th><th style="width:34%">Boundary</th><th style="width:16%">Status</th><th style="width:14%">Confidence</th><th></th></tr></thead><tbody id="odd-body"></tbody></table>
+        <div style="margin-top:14px"><button class="btn tiny" onclick="addOdd()">+ Add dimension</button></div></div>
+      </div>
+
+      <div class="page" id="p-evidence">
+        <h2 class="pt">Evidence Register</h2><p class="sub">The eight evidence classes ISO 8800 requires. Maturity drives the sufficiency score.</p>
+        <div class="card2" id="ev-body"></div>
+      </div>
+
+      <div class="page" id="p-argument">
+        <h2 class="pt">Assurance Argument <span style="font-family:var(--mono);font-size:12px;color:var(--grey)">— Clause 8, GSN</span></h2>
+        <p class="sub">Generated from your inputs. Green = mature, amber = weak, red = missing. <b>The artefact no requirements tool builds.</b></p>
+        <div class="card2"><div class="gsn" id="gsn"></div></div>
+      </div>
+
+      <div class="page" id="p-sufficiency">
+        <h2 class="pt">Sufficiency &amp; Gaps</h2><p class="sub">Whether the case is defensible, and what an assessor flags first.</p>
+        <div class="card2"><div class="gauge-wrap">
+          <div class="gauge"><svg width="150" height="150" viewBox="0 0 150 150"><circle cx="75" cy="75" r="62" fill="none" stroke="#EDEFED" stroke-width="16"/><circle id="ring2" cx="75" cy="75" r="62" fill="none" stroke="#E8A013" stroke-width="16" stroke-linecap="round" stroke-dasharray="389.6" stroke-dashoffset="389.6"/></svg><div class="lbl"><div><div class="num" id="ring2-num">0</div><div class="u">% sufficient</div></div></div></div>
+          <div style="flex:1"><h3 id="suff-t">—</h3><p class="ch" id="suff-d"></p><div id="cov" style="margin-top:10px"></div></div>
+        </div></div>
+        <div class="card2"><h3>Gap list — assessor's view</h3><div class="ch">Ordered by severity.</div><div id="gaps"></div></div>
+      </div>
+
+      <div class="page" id="p-export">
+        <h2 class="pt">Export</h2><p class="sub">Generate an assessor-ready case summary.</p>
+        <div class="card2"><h3>Assurance case summary</h3><div class="ch">PDF via your browser's print dialog.</div><button class="btn tiny" onclick="doExport()">Export summary (PDF)</button></div>
+      </div>
+
+      <div class="savebar">
+        <button class="btn sm" onclick="saveCase()">Save case</button>
+        <span class="savestate" id="savestate">All changes saved</span>
+      </div>
+      <div class="foot">CASEWRIGHT · YOUR DATA IS PRIVATE TO YOUR ACCOUNT · NOT A SUBSTITUTE FOR ASSESSMENT BY A QUALIFIED FUNCTIONAL SAFETY ENGINEER</div>
+    </main>
+  </div>
+</div>
+
+<div id="printdoc" style="display:none"></div>
+
+<script src="config.js"></script>
+<script>
+/* ================= SUPABASE INIT ================= */
+let sb=null, USER=null;
+const cfg = window.CASEWRIGHT_CONFIG || {};
+const configured = cfg.SUPABASE_URL && !cfg.SUPABASE_URL.includes('PASTE') && cfg.SUPABASE_ANON_KEY && !cfg.SUPABASE_ANON_KEY.includes('PASTE');
+if(configured){ sb = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY); }
+else { document.getElementById('cfgwarn').classList.remove('hidden'); }
+
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ================= AUTH ================= */
+let mode='login';
+function toSignup(){mode='signup';$('auth-title').textContent='Create your account';$('auth-sub').textContent='Start building ISO 8800 assurance cases.';$('auth-go').textContent='Create account';$('auth-switch').innerHTML='Already have an account? <a onclick="toLogin()">Log in</a>';msg('');}
+function toLogin(){mode='login';$('auth-title').textContent='Log in';$('auth-sub').textContent='Welcome back to Casewright.';$('auth-go').textContent='Log in';$('auth-switch').innerHTML='New here? <a onclick="toSignup()">Create an account</a>';msg('');}
+function msg(t,ok){const m=$('auth-msg');if(!t){m.innerHTML='';return;}m.innerHTML=`<div class="${ok?'ok':'err'}">${esc(t)}</div>`;}
+if(location.hash==='#signup') toSignup();
+
+$('auth-go').onclick=async()=>{
+  if(!configured){msg('Supabase not configured — see config.js and SETUP.md.');return;}
+  const email=$('auth-email').value.trim(), pass=$('auth-pass').value;
+  if(!email||!pass){msg('Enter email and password.');return;}
+  $('auth-go').disabled=true;
+  try{
+    if(mode==='signup'){
+      const {error}=await sb.auth.signUp({email,password:pass});
+      if(error)throw error;
+      msg('Account created. If email confirmation is on, check your inbox; otherwise you can log in now.',true);
+      toLogin();
+    }else{
+      const {error}=await sb.auth.signInWithPassword({email,password:pass});
+      if(error)throw error;
+    }
+  }catch(e){msg(e.message||'Something went wrong.');}
+  $('auth-go').disabled=false;
+};
+
+async function logout(){ await sb.auth.signOut(); location.reload(); }
+
+/* session bootstrap */
+async function boot(){
+  if(!configured) return; // stay on auth with warning
+  const {data:{session}}=await sb.auth.getSession();
+  if(session){ USER=session.user; enterApp(); }
+  sb.auth.onAuthStateChange((_e,s)=>{ if(s&&!USER){USER=s.user;enterApp();} });
+}
+function enterApp(){
+  $('view-auth').classList.add('hidden');
+  $('view-app').classList.remove('hidden');
+  $('who').textContent=USER.email;
+  loadList();
+}
+boot();
+
+/* ================= CASE STATE ================= */
+let CUR=null, dirty=false;
+const NEWCASE=()=>({
+  proj:'',name:'',func:'',asil:'',rtype:'',role:'',
+  odd:[{dim:'Lighting',bound:'',status:'IN',conf:'Low'},{dim:'Weather / precipitation',bound:'',status:'IN',conf:'Low'},{dim:'Road type',bound:'',status:'IN',conf:'Low'},{dim:'Speed range',bound:'',status:'IN',conf:'Low'}],
+  evidence:[
+    {id:'E1',t:'Training data ODD coverage map',d:'Quantified mapping of training data against every ODD dimension.',done:false,mat:'None'},
+    {id:'E2',t:'Edge / rare-case dataset',d:'Dataset for boundary conditions: low light, heavy rain, occlusion.',done:false,mat:'None'},
+    {id:'E3',t:'Statistical performance targets',d:'Quantified targets from the safety goal, with confidence bounds.',done:false,mat:'None'},
+    {id:'E4',t:'Out-of-distribution monitoring',d:'Runtime detection of inputs outside the training distribution.',done:false,mat:'None'},
+    {id:'E5',t:'ODD-exit detection & degradation',d:'Detects ODD boundary crossings and transitions to a safe state.',done:false,mat:'None'},
+    {id:'E6',t:'Dataset lifecycle & versioning',d:'Traceable dataset versions, labelling QA, re-validation.',done:false,mat:'None'},
+    {id:'E7',t:'Field / fleet validation',d:'Real-world evidence at meaningful scale within the ODD.',done:false,mat:'None'},
+    {id:'E8',t:'ISO 26262 interface agreement',d:'Documented handling of AI insufficiencies by the deterministic system.',done:false,mat:'None'},
+  ]
+});
+
+/* ================= CASE LIST ================= */
+async function loadList(){
+  $('view-list').classList.remove('hidden'); $('view-editor').classList.add('hidden');
+  const {data,error}=await sb.from('cases').select('*').order('updated_at',{ascending:false});
+  const el=$('caselist');
+  if(error){el.innerHTML=`<div class="empty"><h3>Couldn't load cases</h3><p>${esc(error.message)}</p></div>`;return;}
+  if(!data.length){el.innerHTML=`<div class="empty"><h3>No cases yet</h3><p>Create your first ISO 8800 assurance case to begin.</p><div style="margin-top:16px"><button class="btn sm" onclick="newCase()">+ New case</button></div></div>`;return;}
+  el.innerHTML=data.map(c=>{
+    const C=2*Math.PI*18, off=C*(1-(c.readiness||0)/100);
+    const col=c.readiness>=80?'#2E7D4F':c.readiness>=45?'#E8A013':'#C0392B';
+    return `<div class="caserow" onclick="openCase('${c.id}')">
+      <div class="ci"><h3>${esc(c.name||'Untitled AI element')}</h3><p>${esc(c.proj||'No project')} · ${esc(c.asil||'ASIL —')} · updated ${new Date(c.updated_at).toLocaleDateString()}</p></div>
+      <div class="cr">
+        <div class="ring-mini"><svg width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" fill="none" stroke="#EDEFED" stroke-width="5"/><circle cx="22" cy="22" r="18" fill="none" stroke="${col}" stroke-width="5" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${off}"/></svg><div class="t">${c.readiness||0}</div></div>
+        <button class="btn tiny sec" onclick="event.stopPropagation();delCase('${c.id}','${esc((c.name||'this case').replace(/'/g,''))}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function newCase(){
+  const c=NEWCASE();
+  const {data,error}=await sb.from('cases').insert({user_id:USER.id,...c,readiness:0}).select().single();
+  if(error){alert(error.message);return;}
+  openCase(data.id);
+}
+async function delCase(id,name){
+  if(!confirm(`Delete "${name}"? This cannot be undone.`))return;
+  const {error}=await sb.from('cases').delete().eq('id',id);
+  if(error){alert(error.message);return;}
+  loadList();
+}
+
+async function openCase(id){
+  const {data,error}=await sb.from('cases').select('*').eq('id',id).single();
+  if(error){alert(error.message);return;}
+  CUR=data; dirty=false;
+  $('view-list').classList.add('hidden'); $('view-editor').classList.remove('hidden');
+  hydrate(); renderOdd(); renderEv(); refresh(); setSaved(true);
+  document.querySelector('nav.side button[data-p="dash"]').click();
+}
+function closeCase(){ if(dirty&&!confirm('You have unsaved changes. Leave anyway?'))return; CUR=null; loadList(); }
+
+/* ================= EDITOR NAV ================= */
+document.querySelectorAll('nav.side button.nav').forEach(b=>{
+  b.onclick=()=>{document.querySelectorAll('nav.side button.nav').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));b.classList.add('active');$('p-'+b.dataset.p).classList.add('active');window.scrollTo(0,0);};
+});
+
+/* ================= BIND ================= */
+function hydrate(){const c=CUR;$('f-proj').value=c.proj||'';$('f-name').value=c.name||'';$('f-func').value=c.func||'';$('f-asil').value=c.asil||'';$('f-rtype').value=c.rtype||'';$('f-role').value=c.role||'';}
+function mark(){CUR.proj=$('f-proj').value;CUR.name=$('f-name').value;CUR.func=$('f-func').value;CUR.asil=$('f-asil').value;CUR.rtype=$('f-rtype').value;CUR.role=$('f-role').value;setSaved(false);refresh();}
+function setSaved(s){dirty=!s;$('savestate').textContent=s?'All changes saved':'Unsaved changes';$('savestate').style.color=s?'var(--grey)':'var(--amber-d)';}
+
+/* ================= ODD ================= */
+function renderOdd(){
+  $('odd-body').innerHTML=CUR.odd.map((r,i)=>`<tr>
+    <td><input type="text" value="${esc(r.dim)}" oninput="CUR.odd[${i}].dim=this.value;setSaved(false);refresh()"></td>
+    <td><input type="text" placeholder="e.g. > 200 lux; daylight only" value="${esc(r.bound)}" oninput="CUR.odd[${i}].bound=this.value;setSaved(false);refresh()"></td>
+    <td><select onchange="CUR.odd[${i}].status=this.value;setSaved(false);renderOdd();refresh()">${['IN','LIMIT','OUT'].map(s=>`<option ${r.status===s?'selected':''}>${s}</option>`).join('')}</select> <span class="status-pill s-${r.status.toLowerCase()}">${r.status}</span></td>
+    <td><select onchange="CUR.odd[${i}].conf=this.value;setSaved(false);refresh()">${['Low','Medium','High'].map(c=>`<option ${r.conf===c?'selected':''}>${c}</option>`).join('')}</select></td>
+    <td><button class="btn tiny sec" onclick="CUR.odd.splice(${i},1);setSaved(false);renderOdd();refresh()">×</button></td></tr>`).join('');
+}
+function addOdd(){CUR.odd.push({dim:'',bound:'',status:'IN',conf:'Low'});setSaved(false);renderOdd();}
+
+/* ================= EVIDENCE ================= */
+function renderEv(){
+  const chip={None:'c-none',Planned:'c-plan',Draft:'c-draft',Reviewed:'c-rev',Assessed:'c-assess'};
+  $('ev-body').innerHTML=`<table><thead><tr><th style="width:34px"></th><th>Evidence class</th><th style="width:150px">Maturity</th></tr></thead><tbody>`+
+    CUR.evidence.map((e,i)=>`<tr>
+      <td><input type="checkbox" ${e.done?'checked':''} onchange="CUR.evidence[${i}].done=this.checked;setSaved(false);refresh()"></td>
+      <td><b>${e.id}</b> · ${esc(e.t)}<div class="ch" style="margin:2px 0 0">${esc(e.d)}</div></td>
+      <td><select onchange="CUR.evidence[${i}].mat=this.value;setSaved(false);refresh()">${['None','Planned','Draft','Reviewed','Assessed'].map(m=>`<option ${e.mat===m?'selected':''}>${m}</option>`).join('')}</select> <span class="chip ${chip[e.mat]}" style="margin-top:5px">${e.mat}</span></td></tr>`).join('')+`</tbody></table>`;
+}
+
+/* ================= SCORING (same engine as prototype) ================= */
+const MATW={None:0,Planned:.25,Draft:.5,Reviewed:.8,Assessed:1};
+function evOK(id){const e=CUR.evidence.find(x=>x.id===id);return e&&e.done?MATW[e.mat]:0;}
+function claimScore(ids){const v=ids.map(evOK);return v.reduce((a,b)=>a+b,0)/v.length;}
+function compute(){
+  let pts=0,max=0,gaps=[];const e=CUR;
+  max+=15;const filled=[e.name,e.func,e.asil,e.role].filter(Boolean).length;pts+=filled/4*15;
+  if(filled<4)gaps.push({s:'HIGH',t:'AI element definition incomplete — assessor cannot scope the case without name, function, ASIL and the ISO 26262 interface role.'});
+  max+=25;const wb=CUR.odd.filter(o=>o.dim&&o.bound).length;pts+=CUR.odd.length?wb/CUR.odd.length*25:0;
+  CUR.odd.forEach(o=>{if(o.dim&&!o.bound)gaps.push({s:'HIGH',t:`ODD dimension "${esc(o.dim)}" has no quantified boundary — will not survive assessment.`});});
+  if(!CUR.odd.some(o=>o.status!=='IN'))gaps.push({s:'MED',t:'No LIMIT/OUT conditions declared. An ODD with no stated boundary is a red flag.'});
+  CUR.odd.filter(o=>o.status==='LIMIT'&&o.conf==='Low').forEach(o=>gaps.push({s:'MED',t:`Boundary "${esc(o.dim)}" is LIMIT with low confidence — prioritise edge-case evidence (E2).`}));
+  max+=60;const es=CUR.evidence.reduce((a,ev)=>a+(ev.done?MATW[ev.mat]:0),0)/CUR.evidence.length;pts+=es*60;
+  CUR.evidence.filter(ev=>!ev.done||ev.mat==='None').forEach(ev=>gaps.push({s:['E1','E3','E8'].includes(ev.id)?'HIGH':'MED',t:`${ev.id} (${esc(ev.t)}) missing — ${ev.id==='E8'?'without the ISO 26262 interface agreement the case has no anchor in the vehicle-level argument.':'required to support its argument branch.'}`}));
+  return {score:Math.round(pts/max*100),gaps};
+}
+
+/* ================= ARGUMENT ================= */
+function evPills(ids){return `<div class="ev">`+ids.map(id=>{const e=CUR.evidence.find(x=>x.id===id);const v=evOK(id);const cls=v>=.8?'ok':v>0?'weak':'miss';const lab=v>0?e.mat.toUpperCase():'MISSING';return `<span class="evpill ${cls}">${v>=.8?'●':v>0?'◐':'○'} ${id} — ${lab}</span>`;}).join('')+`</div>`;}
+function badge(sc){const p=Math.round(sc*100);const bg=sc>=.8?'var(--green-l)':sc>0?'var(--amber-l)':'var(--red-l)';const c=sc>=.8?'var(--green)':sc>0?'var(--amber-d)':'var(--red)';return `<span class="claimscore" style="background:${bg};color:${c}">${p}%</span>`;}
+function renderGsn(){
+  const e=CUR;const lim=CUR.odd.filter(o=>o.status!=='IN').map(o=>o.dim||'(unnamed)').join(', ')||'none declared';
+  const c11=claimScore(['E5']),c12=claimScore(['E1','E2','E6']),c13=claimScore(['E3','E7']),c14=claimScore(['E4','E5','E8']);
+  $('gsn').innerHTML=`<div class="gnode"><span class="gt">G1 · TOP CLAIM</span><div class="gc">The AI element <b>${esc(e.name)||'(unnamed)'}</b> is sufficiently safe to perform its role within its declared ODD, supporting a ${esc(e.asil)||'(ASIL?)'} safety goal.</div></div>
+   <div class="gsub">
+     <div class="gnode">${badge(c11)}<span class="gt">G1.1 · ODD IS COMPLETE &amp; BOUNDED</span><div class="gc">Input space defined across ${CUR.odd.length} dimensions; boundaries: ${esc(lim)}.</div>${evPills(['E5'])}</div>
+     <div class="gnode">${badge(c12)}<span class="gt">G1.2 · DATA IS SUFFICIENT FOR THE ODD</span><div class="gc">Training and validation data cover the declared ODD, including boundary and rare conditions.</div>${evPills(['E1','E2','E6'])}</div>
+     <div class="gnode">${badge(c13)}<span class="gt">G1.3 · PERFORMANCE MEETS SAFETY TARGETS</span><div class="gc">Statistical performance satisfies targets derived from the safety goal.</div>${evPills(['E3','E7'])}</div>
+     <div class="gnode">${badge(c14)}<span class="gt">G1.4 · INSUFFICIENCIES CONTROLLED AT RUNTIME</span><div class="gc">OOD inputs and ODD exits are detected and handled by the surrounding ISO 26262 system.</div>${evPills(['E4','E5','E8'])}</div>
+   </div>`;
+}
+function renderSuff(score,gaps){
+  const t=$('suff-t'),d=$('suff-d');
+  if(score>=80){t.textContent='Assessment-ready draft.';d.textContent='Remaining gaps are refinements, not structural holes.';}
+  else if(score>=45){t.textContent='Structured but not yet sufficient.';d.textContent='The argument skeleton stands; evidence maturity is the bottleneck.';}
+  else{t.textContent='Early scoping stage.';d.textContent='Enough for a design conversation — not yet enough to show an assessor.';}
+  const c11=claimScore(['E5']),c12=claimScore(['E1','E2','E6']),c13=claimScore(['E3','E7']),c14=claimScore(['E4','E5','E8']);
+  const bar=(l,v)=>`<div style="display:flex;align-items:center;gap:10px;margin:5px 0"><span style="font-family:var(--mono);font-size:11px;width:210px;color:var(--grey)">${l}</span><div style="flex:1;height:8px;background:#EDEFED;border-radius:5px;overflow:hidden"><div style="height:100%;width:${Math.round(v*100)}%;background:${v>=.8?'var(--green)':v>0?'var(--amber)':'var(--red)'}"></div></div><span style="font-family:var(--mono);font-size:11px;width:34px;text-align:right">${Math.round(v*100)}%</span></div>`;
+  $('cov').innerHTML=bar('G1.1 ODD bounded',c11)+bar('G1.2 Data sufficient',c12)+bar('G1.3 Performance',c13)+bar('G1.4 Runtime control',c14);
+  const ord={HIGH:0,MED:1,LOW:2};
+  $('gaps').innerHTML=gaps.length?gaps.sort((a,b)=>ord[a.s]-ord[b.s]).map(g=>`<div class="gap"><span class="sev ${g.s.toLowerCase()}">${g.s}</span><div class="gx">${g.t}</div></div>`).join(''):'<div class="gap"><span class="sev low">OK</span><div class="gx">No open gaps at this level.</div></div>';
+}
+function setRing(id,numId,score){const C=2*Math.PI*62;const r=$(id);if(r){r.style.strokeDashoffset=C*(1-score/100);r.style.stroke=score>=80?'#2E7D4F':score>=45?'#E8A013':'#C0392B';}if($(numId))$(numId).textContent=score;}
+
+function refresh(){
+  if(!CUR)return;
+  const {score,gaps}=compute();
+  CUR.readiness=score;
+  $('k-ready').textContent=score+'%';
+  $('k-gaps').textContent=gaps.length;
+  $('k-ev').textContent=CUR.evidence.filter(x=>x.done&&(x.mat==='Reviewed'||x.mat==='Assessed')).length+'/8';
+  $('k-odd').textContent=CUR.odd.filter(o=>o.status!=='IN').length;
+  setRing('ring','ring-num',score);setRing('ring2','ring2-num',score);
+  const vt=$('verdict-t'),vd=$('verdict-d');
+  if(!CUR.name){vt.textContent='Define the AI element to begin';vd.textContent='Start on the AI Element & Scope tab, or fill the worked example.';}
+  else if(score>=80){vt.textContent='Assessment-ready draft';vd.textContent='Remaining gaps are refinements.';}
+  else if(score>=45){vt.textContent='Structured but not yet sufficient';vd.textContent='Evidence maturity is the bottleneck.';}
+  else{vt.textContent='Early scoping stage';vd.textContent='Enough for a design conversation.';}
+  renderGsn();renderSuff(score,gaps);buildPrint(score,gaps);
+}
+
+/* ================= SAVE ================= */
+async function saveCase(){
+  if(!CUR)return;
+  const {score}=compute();
+  const {error}=await sb.from('cases').update({
+    proj:CUR.proj,name:CUR.name,func:CUR.func,asil:CUR.asil,rtype:CUR.rtype,role:CUR.role,
+    odd:CUR.odd,evidence:CUR.evidence,readiness:score
+  }).eq('id',CUR.id);
+  if(error){$('savestate').textContent='Save failed: '+error.message;$('savestate').style.color='var(--red)';return;}
+  setSaved(true);
+}
+
+/* ================= EXPORT ================= */
+function buildPrint(score,gaps){
+  const e=CUR;
+  $('printdoc').innerHTML=`<h1 style="font-size:20px;border-bottom:2px solid #000;padding-bottom:6px">Casewright — ISO/PAS 8800 Assurance Case Summary (Draft)</h1>
+   <p><b>AI element:</b> ${esc(e.name)||'—'} · <b>Function:</b> ${esc(e.func)||'—'} · <b>ASIL:</b> ${esc(e.asil)||'—'} · <b>Project:</b> ${esc(e.proj)||'—'}</p>
+   <p><b>ISO 26262 interface:</b> ${esc(e.role)||'—'}</p><h3>Readiness: ${score}%</h3>
+   <h3 style="margin-top:12px">ODD</h3><table style="width:100%;border-collapse:collapse;font-size:12px"><tr><th style="border:1px solid #999;padding:4px;text-align:left">Dimension</th><th style="border:1px solid #999;padding:4px;text-align:left">Boundary</th><th style="border:1px solid #999;padding:4px">Status</th><th style="border:1px solid #999;padding:4px">Conf.</th></tr>${e.odd.map(o=>`<tr><td style="border:1px solid #999;padding:4px">${esc(o.dim)}</td><td style="border:1px solid #999;padding:4px">${esc(o.bound)}</td><td style="border:1px solid #999;padding:4px">${o.status}</td><td style="border:1px solid #999;padding:4px">${o.conf}</td></tr>`).join('')}</table>
+   <h3 style="margin-top:12px">Evidence register</h3><table style="width:100%;border-collapse:collapse;font-size:12px"><tr><th style="border:1px solid #999;padding:4px">ID</th><th style="border:1px solid #999;padding:4px;text-align:left">Item</th><th style="border:1px solid #999;padding:4px">Present</th><th style="border:1px solid #999;padding:4px">Maturity</th></tr>${e.evidence.map(v=>`<tr><td style="border:1px solid #999;padding:4px">${v.id}</td><td style="border:1px solid #999;padding:4px">${esc(v.t)}</td><td style="border:1px solid #999;padding:4px">${v.done?'Yes':'No'}</td><td style="border:1px solid #999;padding:4px">${v.mat}</td></tr>`).join('')}</table>
+   <h3 style="margin-top:12px">Top gaps</h3><ol>${gaps.slice(0,10).map(g=>`<li>[${g.s}] ${esc(g.t)}</li>`).join('')}</ol>
+   <p style="margin-top:14px;font-size:10px;color:#666">Casewright · ${new Date().toISOString().slice(0,10)} · Draft — requires review by a qualified functional safety engineer.</p>`;
+}
+function doExport(){const w=window.open('','_blank');w.document.write('<html><head><title>Casewright Case Summary</title></head><body style="font-family:Arial,sans-serif;padding:30px">'+$('printdoc').innerHTML+'</body></html>');w.document.close();w.focus();setTimeout(()=>w.print(),300);}
+
+/* ================= DEMO FILL ================= */
+function fillDemo(){
+  CUR.proj='OEM-X L2+ Highway, SOP 2028';CUR.name='Front camera pedestrian detection';CUR.func='Perception — object detection';CUR.asil='ASIL B';CUR.rtype='Performance';
+  CUR.role='Detection output feeds the AEB decision function (ASIL D goal). A missed detection is a safety-relevant insufficiency; a false positive triggers unnecessary braking.';
+  CUR.odd=[{dim:'Lighting',bound:'> 200 lux ambient (daylight & lit tunnels)',status:'LIMIT',conf:'Medium'},{dim:'Weather / precipitation',bound:'Dry to moderate rain (< 8 mm/h)',status:'LIMIT',conf:'Low'},{dim:'Road type',bound:'Divided highway, structured lanes',status:'IN',conf:'High'},{dim:'Speed range',bound:'30–130 km/h ego speed',status:'IN',conf:'High'},{dim:'Snow / ice occlusion',bound:'Not designed for sensor occlusion by snow',status:'OUT',conf:'High'}];
+  CUR.evidence.forEach(ev=>{if(['E1','E3','E5','E8'].includes(ev.id)){ev.done=true;ev.mat='Draft';}if(ev.id==='E6'){ev.done=true;ev.mat='Reviewed';}if(['E2','E4','E7'].includes(ev.id)){ev.done=false;ev.mat='None';}});
+  hydrate();renderOdd();renderEv();setSaved(false);refresh();
+}
+
+/* warn on unsaved close */
+window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
+</script>
+</body>
+</html>
